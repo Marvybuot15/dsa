@@ -567,15 +567,15 @@ void saveData() {
     }
     User* currentUser  = userList;
     while (currentUser  != NULL) {
-        fprintf(file, "USER:%s:%s:%d\n", currentUser ->username, currentUser ->password, currentUser ->isAdmin);
+        printf(file, "USER:%s:%s:%d\n", currentUser ->username, currentUser ->password, currentUser ->isAdmin);
         currentUser  = currentUser ->next;
     }
     Reservation* currentReservation = reservationList;
     while (currentReservation != NULL) {
-        fprintf(file, "RESERVATION:%s:%d:%s %s:%s %s\n", currentReservation->username, currentReservation->roomNumber, currentReservation->checkInDate, currentReservation->checkInTime, currentReservation->checkOutDate, currentReservation->checkOutTime);
+        printf(file, "RESERVATION:%s:%d:%s %s:%s %s\n", currentReservation->username, currentReservation->roomNumber, currentReservation->checkInDate, currentReservation->checkInTime, currentReservation->checkOutDate, currentReservation->checkOutTime);
         currentReservation = currentReservation->next;
     }
-    fclose(file);
+    close(file);
 }
 
 void loadData() {
@@ -595,12 +595,12 @@ void loadData() {
         if (strcmp(type, "USER") == 0) {
             char username[MAX_NAME_LEN], password[MAX_PASSWORD_LEN];
             int isAdmin;
-            sscanf(line, "USER:%[^:]:%[^:]:%d", username, password, &isAdmin);
+            scanf(line, "USER:%[^:]:%[^:]:%d", username, password, &isAdmin);
             addUser (username, password, isAdmin);
         } else if (strcmp(type, "RESERVATION") == 0) {
             char username[MAX_NAME_LEN], checkInDate[11], checkInTime[6], checkOutDate[11], checkOutTime[6];
             int roomNumber;
-            sscanf(line, "RESERVATION:%[^:]:%d:%[^ ] %[^:]:%[^ ] %[^:]", username, &roomNumber, checkInDate, checkInTime, checkOutDate, checkOutTime);
+            scanf(line, "RESERVATION:%[^:]:%d:%[^ ] %[^:]:%[^ ] %[^:]", username, &roomNumber, checkInDate, checkInTime, checkOutDate, checkOutTime);
             addReservation(username, roomNumber, checkInDate, checkInTime, checkOutDate, checkOutTime);
             rooms[roomNumber - 1].isBooked = 1;
         }
