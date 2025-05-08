@@ -3,11 +3,27 @@
 #include <conio.h>
 #include <time.h>
 #include <string.h>
+#include <windows.h>
 
 #define MAX_NAME_LEN 50
 #define MAX_PASSWORD_LEN 50
 #define MAX_ROOM_TYPE_LEN 50
 #define DATA_FILE "reservations.dat"
+
+// Key codes
+#define KEY_UP 72
+#define KEY_DOWN 80
+#define KEY_ENTER 13
+#define KEY_ESC 27
+
+// Colors
+#ifndef COLOR_NORMAL
+#define COLOR_NORMAL 7     // White text on black background
+#endif
+
+#ifndef COLOR_HIGHLIGHT
+#define COLOR_HIGHLIGHT 240 // Black text on white background
+#endif
 
 typedef struct Room {
     int roomNumber;
@@ -69,15 +85,116 @@ void searchAvailableRooms();
 int compareDates(char date1[], char date2[]);
 void displayHeader(const char* title);
 int isRoomBooked(int roomNumber);
+void updateRoomPrices(void);
 int isRoomAvailableForDates(int roomNumber, char checkInDate[], char checkOutDate[]);
 char* formatDateTime(char date[], char time[]);
+int getMenuChoice(char* menuItems[], int itemCount);
+void gotoxy(int x, int y);
+void setTextColor(int color);
+void displayMessage(const char* message);
 
-int isLeapYear(int year) {
-    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+// Function to position cursor at specific coordinates
+void gotoxy(int x, int y) {
+    COORD coord;
+    coord.X = x;
+    coord.Y = y;
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+}
+
+// Function to set text color
+void setTextColor(int color) {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
+}
+// Function to get menu choice using highlighting
+int getMenuChoice(char* menuItems[], int itemCount) {
+    int selected = 0;
+    int key = 0;
+    int i;
+    
+    // Position for menu items
+    int menuX = 5; // Changed from 45 to 28 to align with the rest of the interface
+    int menuY = 7;  // Vertical position (starting line below the header)
+    
+    // Display menu items
+    for (i = 0; i < itemCount; i++) {
+        gotoxy(menuX, menuY + i); // Use menuY for vertical positioning
+        
+        if (i == selected) {
+            setTextColor(COLOR_HIGHLIGHT);
+            printf("%s", menuItems[i]);
+            setTextColor(COLOR_NORMAL);
+        } else {
+            printf("%s", menuItems[i]);
+        }
+    }
+    
+    // Handle key presses
+    while (1) {
+        key = getch();
+        
+        // If arrow key is pressed, getch() returns 0 or 0xE0, then the actual key code
+        if (key == 0 || key == 0xE0) {
+            key = getch();
+            
+            if (key == KEY_UP && selected > 0) {
+                // Unhighlight current selection
+                gotoxy(menuX, menuY + selected);
+                setTextColor(COLOR_NORMAL);
+                printf("%s", menuItems[selected]);
+                
+                // Move selection up
+                selected--;
+                
+                // Highlight new selection
+                gotoxy(menuX, menuY + selected);
+                setTextColor(COLOR_HIGHLIGHT);
+                printf("%s", menuItems[selected]);
+                setTextColor(COLOR_NORMAL);
+            } 
+            else if (key == KEY_DOWN && selected < itemCount - 1) {
+                // Unhighlight current selection
+                gotoxy(menuX, menuY + selected);
+                setTextColor(COLOR_NORMAL);
+                printf("%s", menuItems[selected]);
+                
+                // Move selection down
+                selected++;
+                
+                // Highlight new selection
+                gotoxy(menuX, menuY + selected);
+                setTextColor(COLOR_HIGHLIGHT);
+                printf("%s", menuItems[selected]);
+                setTextColor(COLOR_NORMAL);
+            }
+        } 
+        else if (key == KEY_ENTER) {
+            // Return the selected index + 1 (to match the original menu numbering)
+            return selected + 1;
+        } 
+        else if (key == KEY_ESC) {
+            // ESC key pressed, return the last option (usually exit/back)
+            return itemCount;
+        }
+    }
 }
 
 void displayHeader(const char* title) {
-    printf("\n=== %s ===\n", title);
+    system("cls");
+    setTextColor(COLOR_NORMAL);
+    printf("\n");
+    printf("  +--------------------------------------+\n");
+    printf("  ¦           %-28s ¦\n", title);
+    printf("  +--------------------------------------+\n\n");
+}
+
+void displayMessage(const char* message) {
+    printf("\n  %s\n", message);
+    printf("\n  Press any key to continue...");
+    getch();
+}
+
+int isLeapYear(int year) {
+    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
 
 int isValidDate(char date[]) {
@@ -139,16 +256,16 @@ int isRoomAvailableForDates(int roomNumber, char checkInDate[], char checkOutDat
     
     while (current != NULL) {
         if (current->roomNumber == roomNumber) {
-            // Check if there's an overlap in reservation dates
+            
             if (!(compareDates(checkOutDate, current->checkInDate) < 0 || 
                   compareDates(checkInDate, current->checkOutDate) > 0)) {
-                return 0; // Room is not available for these dates
+                return 0; 
             }
         }
         current = current->next;
     }
     
-    return 1; // Room is available for these dates
+    return 1; 
 }
 
 void initializeRooms() {
@@ -177,7 +294,7 @@ void addUser(char username[], char password[], int isAdmin) {
     User* current = userList;
     while (current != NULL) {
         if (strcmp(current->username, username) == 0) {
-            return; // User already exists
+            return; 
         }
         current = current->next;
     }
@@ -193,34 +310,32 @@ User* authenticateUser(char username[], char password[]) {
     User* current = userList;
     while (current != NULL) {
         if (strcmp(current->username, username) == 0 && strcmp(current->password, password) == 0) {
-            return current; // Authentication successful
+            return current; 
         }
         current = current->next;
     }
-    return NULL; // Authentication failed
+    return NULL; 
 }
 
 void displayRooms() {
-    system("cls");
     displayHeader("AVAILABLE ROOMS");
     
-    printf("\n%-8s %-20s %-12s %-15s\n", "Room #", "Room Type", "Status", "Price/Night(P)");
-    printf("----------------------------------------------------------\n");
+    printf("  %-8s %-20s %-12s %-15s\n", "Room #", "Room Type", "Status", "Price/Night(P)");
+    printf("  ----------------------------------------------------------\n");
     
     int i;
     for (i = 0; i < totalRooms; i++) {
-        printf("%-8d %-20s %-12s P%-14.0f\n", 
+        printf("  %-8d %-20s %-12s P%-14.0f\n", 
                rooms[i].roomNumber, 
                rooms[i].roomType, 
                "Available", // Always show as available
                rooms[i].pricePerNight);
     }
     
-    printf("----------------------------------------------------------\n");
+    printf("  ----------------------------------------------------------\n");
 }
 
 void makeReservation(char username[]) {
-    system("cls");
     displayHeader("MAKE A RESERVATION");
     
     int roomNumber;
@@ -228,81 +343,70 @@ void makeReservation(char username[]) {
     
     displayRooms();
     
-    printf("\nEnter room number to reserve: ");
+    printf("\n  Enter room number to reserve: ");
     scanf("%d", &roomNumber);
     
     if (roomNumber < 1 || roomNumber > totalRooms) {
-        printf("\nError: Invalid room number.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid room number.");
         return;
     }
     
-    printf("Enter check-in date (YYYY-MM-DD): ");
+    printf("  Enter check-in date (YYYY-MM-DD): ");
     scanf("%10s", checkInDate);
     
     if (!isValidDate(checkInDate)) {
-        printf("\nError: Invalid date format.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid date format.");
         return;
     }
     
-    printf("Enter check-in time (HH:MM): ");
+    printf("  Enter check-in time (HH:MM): ");
     scanf("%5s", checkInTime);
     
     if (!isValidTime(checkInTime)) {
-        printf("\nError: Invalid time format.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid time format.");
         return;
     }
     
-    printf("Enter check-out date (YYYY-MM-DD): ");
+    printf("  Enter check-out date (YYYY-MM-DD): ");
     scanf("%10s", checkOutDate);
     
     if (!isValidDate(checkOutDate)) {
-        printf("\nError: Invalid date format.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid date format.");
         return;
     }
     
-    printf("Enter check-out time (HH:MM): ");
+    printf("  Enter check-out time (HH:MM): ");
     scanf("%5s", checkOutTime);
     
     if (!isValidTime(checkOutTime)) {
-        printf("\nError: Invalid time format.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid time format.");
         return;
     }
     
     // Validate check-in before check-out
     if (compareDates(checkInDate, checkOutDate) > 0 || 
         (compareDates(checkInDate, checkOutDate) == 0 && strcmp(checkInTime, checkOutTime) >= 0)) {
-        printf("\nError: Check-in date/time must be before check-out date/time.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Check-in date/time must be before check-out date/time.");
         return;
     }
     
     // Check if room is available for the selected dates
     if (!isRoomAvailableForDates(roomNumber, checkInDate, checkOutDate)) {
-        printf("\nError: Room %d is not available for the selected dates.\n", roomNumber);
-        printf("Please select different dates or a different room.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        char message[100];
+        sprintf(message, "Error: Room %d is not available for the selected dates.\nPlease select different dates or a different room.", roomNumber);
+        displayMessage(message);
         return;
     }
     
     addReservation(username, roomNumber, checkInDate, checkInTime, checkOutDate, checkOutTime);
     
-    system("cls");
-    printf("\n=== Reservation Successful ===\n");
-    printf("Room %d has been reserved for you.\n", roomNumber);
-    printf("\nPress any key to continue...");
-    getch();
+    // Save data immediately after making a reservation
+    saveData();
+    
+    char message[100];
+    sprintf(message, "Reservation Successful\nRoom %d has been reserved for you.", roomNumber);
+    displayHeader("RESERVATION SUCCESSFUL");
+    displayMessage(message);
 }
 
 void addReservation(char username[], int roomNumber, char checkInDate[], char checkInTime[], char checkOutDate[], char checkOutTime[]) {
@@ -318,13 +422,12 @@ void addReservation(char username[], int roomNumber, char checkInDate[], char ch
 }
 
 void removeReservation(char username[]) {
-    system("cls");
     displayHeader("REMOVE RESERVATION");
     
     char inputUsername[MAX_NAME_LEN];
     int roomNumber;
     
-    printf("Enter username to remove reservation: ");
+    printf("  Enter username to remove reservation: ");
     scanf("%s", inputUsername);
     
     Reservation* current = reservationList;
@@ -332,13 +435,13 @@ void removeReservation(char username[]) {
     int found = 0;
     
     // Display user's reservations
-    printf("\nReservations for %s:\n", inputUsername);
-    printf("%-8s %-25s %-25s\n", "Room #", "Check-in", "Check-out");
-    printf("------------------------------------------------------------------\n");
+    printf("\n  Reservations for %s:\n", inputUsername);
+    printf("  %-8s %-25s %-25s\n", "Room #", "Check-in", "Check-out");
+    printf("  ------------------------------------------------------------------\n");
     
     while (current != NULL) {
         if (strcmp(current->username, inputUsername) == 0) {
-            printf("%-8d %-25s %-25s\n", 
+            printf("  %-8d %-25s %-25s\n", 
                    current->roomNumber, 
                    formatDateTime(current->checkInDate, current->checkInTime),
                    formatDateTime(current->checkOutDate, current->checkOutTime));
@@ -348,19 +451,17 @@ void removeReservation(char username[]) {
     }
     
     if (!found) {
-        printf("\nNo reservations found for user %s.\n", inputUsername);
-        printf("\nPress any key to continue...");
-        getch();
+        char message[100];
+        sprintf(message, "No reservations found for user %s.", inputUsername);
+        displayMessage(message);
         return;
     }
     
-    printf("\nEnter room number to remove reservation: ");
+    printf("\n  Enter room number to remove reservation: ");
     scanf("%d", &roomNumber);
     
     if (roomNumber < 1 || roomNumber > totalRooms) {
-        printf("\nError: Invalid room number.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid room number.");
         return;
     }
     
@@ -380,11 +481,13 @@ void removeReservation(char username[]) {
             
             free(current);
             
-            system("cls");
-            printf("\n=== Reservation Removed ===\n");
-            printf("Reservation for Room %d by %s has been removed successfully.\n", roomNumber, inputUsername);
-            printf("\nPress any key to continue...");
-            getch();
+            // Save data immediately after removing a reservation
+            saveData();
+            
+            char message[100];
+            sprintf(message, "Reservation for Room %d by %s has been removed successfully.", roomNumber, inputUsername);
+            displayHeader("RESERVATION REMOVED");
+            displayMessage(message);
             return;
         }
         prev = current;
@@ -392,25 +495,22 @@ void removeReservation(char username[]) {
     }
     
     if (!found) {
-        printf("\nNo reservation found for this room and user.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("No reservation found for this room and user.");
     }
 }
 
 void viewReservations(char username[]) {
-    system("cls");
     displayHeader("YOUR RESERVATIONS");
     
     Reservation* current = reservationList;
     int found = 0;
     
-    printf("\n%-8s %-25s %-25s\n", "Room #", "Check-in", "Check-out");
-    printf("------------------------------------------------------------------\n");
+    printf("  %-8s %-25s %-25s\n", "Room #", "Check-in", "Check-out");
+    printf("  ------------------------------------------------------------------\n");
     
     while (current != NULL) {
         if (strcmp(current->username, username) == 0) {
-            printf("%-8d %-25s %-25s\n", 
+            printf("  %-8d %-25s %-25s\n", 
                    current->roomNumber, 
                    formatDateTime(current->checkInDate, current->checkInTime),
                    formatDateTime(current->checkOutDate, current->checkOutTime));
@@ -420,15 +520,15 @@ void viewReservations(char username[]) {
     }
     
     if (!found) {
-        printf("No reservations found for %s.\n", username);
+        char message[100];
+        sprintf(message, "No reservations found for %s.", username);
+        printf("  %s\n", message);
     }
     
-    printf("\nPress any key to continue...");
-    getch();
+    displayMessage("");
 }
 
 void createRoom() {
-    system("cls");
     displayHeader("CREATE NEW ROOM");
     
     resizeRooms();
@@ -436,10 +536,10 @@ void createRoom() {
     char roomType[MAX_ROOM_TYPE_LEN];
     double pricePerNight;
     
-    printf("Enter room type for Room %d: ", roomNumber);
+    printf("  Enter room type for Room %d: ", roomNumber);
     scanf("%s", roomType);
     
-    printf("Enter price per night for Room %d: $", roomNumber);
+    printf("  Enter price per night for Room %d: $", roomNumber);
     scanf("%lf", &pricePerNight);
     
     rooms[totalRooms].roomNumber = roomNumber;
@@ -447,11 +547,13 @@ void createRoom() {
     rooms[totalRooms].pricePerNight = pricePerNight;
     totalRooms++;
     
-    system("cls");
-    printf("\n=== Room Created ===\n");
-    printf("Room %d created successfully!\n", roomNumber);
-    printf("\nPress any key to continue...");
-    getch();
+    // Save data immediately after creating a room
+    saveData();
+    
+    char message[100];
+    sprintf(message, "Room %d created successfully!", roomNumber);
+    displayHeader("ROOM CREATED");
+    displayMessage(message);
 }
 
 void resizeRooms() {
@@ -468,31 +570,28 @@ void resizeRooms() {
 }
 
 void viewReservationsByRoom() {
-    system("cls");
     displayHeader("ROOM RESERVATIONS");
     
     int roomNumber;
     
-    printf("Enter room number to view reservations: ");
+    printf("  Enter room number to view reservations: ");
     scanf("%d", &roomNumber);
     
     if (roomNumber < 1 || roomNumber > totalRooms) {
-        printf("\nError: Invalid room number.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Invalid room number.");
         return;
     }
     
     Reservation* current = reservationList;
     int found = 0;
     
-    printf("\nReservations for Room %d:\n", roomNumber);
-    printf("%-10s %-25s %-25s\n", "Username", "Check-in", "Check-out");
-    printf("------------------------------------------------------------------\n");
+    printf("\n  Reservations for Room %d:\n", roomNumber);
+    printf("  %-10s %-25s %-25s\n", "Username", "Check-in", "Check-out");
+    printf("  ------------------------------------------------------------------\n");
     
     while (current != NULL) {
         if (current->roomNumber == roomNumber) {
-            printf("%-10s %-25s %-25s\n", 
+            printf("  %-10s %-25s %-25s\n", 
                    current->username, 
                    formatDateTime(current->checkInDate, current->checkInTime),
                    formatDateTime(current->checkOutDate, current->checkOutTime));
@@ -502,20 +601,20 @@ void viewReservationsByRoom() {
     }
     
     if (!found) {
-        printf("No reservations found for Room %d.\n", roomNumber);
+        char message[100];
+        sprintf(message, "No reservations found for Room %d.", roomNumber);
+        printf("  %s\n", message);
     }
     
-    printf("\nPress any key to continue...");
-    getch();
+    displayMessage("");
 }
 
 void changePassword(char username[]) {
-    system("cls");
     displayHeader("CHANGE PASSWORD");
     
     char oldPassword[MAX_PASSWORD_LEN], newPassword[MAX_PASSWORD_LEN];
     
-    printf("Enter your current password: ");
+    printf("  Enter your current password: ");
     int i = 0;
     char ch;
     
@@ -534,13 +633,11 @@ void changePassword(char username[]) {
     
     User* user = authenticateUser(username, oldPassword);
     if (!user) {
-        printf("\n\nError: Current password is incorrect.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Current password is incorrect.");
         return;
     }
     
-    printf("\nEnter new password: ");
+    printf("\n  Enter new password: ");
     i = 0;
     
     while ((ch = getch()) != '\r') {
@@ -558,28 +655,26 @@ void changePassword(char username[]) {
     
     strcpy(user->password, newPassword);
     
-    system("cls");
-    printf("\n=== Password Changed ===\n");
-    printf("Your password has been changed successfully!\n");
-    printf("\nPress any key to continue...");
-    getch();
+    // Save data immediately after changing password
+    saveData();
+    
+    displayHeader("PASSWORD CHANGED");
+    displayMessage("Your password has been changed successfully!");
 }
-
 void modifyReservation(char username[]) {
-    system("cls");
     displayHeader("MODIFY RESERVATION");
     
     // Display user's reservations first
     Reservation* current = reservationList;
     int found = 0;
     
-    printf("\nYour Current Reservations:\n");
-    printf("%-8s %-25s %-25s\n", "Room #", "Check-in", "Check-out");
-    printf("------------------------------------------------------------------\n");
+    printf("  Your Current Reservations:\n");
+    printf("  %-8s %-25s %-25s\n", "Room #", "Check-in", "Check-out");
+    printf("  ------------------------------------------------------------------\n");
     
     while (current != NULL) {
         if (strcmp(current->username, username) == 0) {
-            printf("%-8d %-25s %-25s\n", 
+            printf("  %-8d %-25s %-25s\n", 
                    current->roomNumber, 
                    formatDateTime(current->checkInDate, current->checkInTime),
                    formatDateTime(current->checkOutDate, current->checkOutTime));
@@ -589,14 +684,12 @@ void modifyReservation(char username[]) {
     }
     
     if (!found) {
-        printf("You have no reservations to modify.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("You have no reservations to modify.");
         return;
     }
     
     int roomNumber;
-    printf("\nEnter room number to modify reservation: ");
+    printf("\n  Enter room number to modify reservation: ");
     scanf("%d", &roomNumber);
     
     current = reservationList;
@@ -611,47 +704,43 @@ void modifyReservation(char username[]) {
     }
     
     if (!found) {
-        printf("\nError: No reservation found for Room %d.\n", roomNumber);
-        printf("\nPress any key to continue...");
-        getch();
+        char message[100];
+        sprintf(message, "Error: No reservation found for Room %d.", roomNumber);
+        displayMessage(message);
         return;
     }
     
     // Display current reservation details
-    printf("\nCurrent Check-in Date: %s, Check-in Time: %s\n", current->checkInDate, current->checkInTime);
-    printf("Current Check-out Date: %s, Check-out Time: %s\n", current->checkOutDate, current->checkOutTime);
+    printf("\n  Current Check-in Date: %s, Check-in Time: %s\n", current->checkInDate, current->checkInTime);
+    printf("  Current Check-out Date: %s, Check-out Time: %s\n", current->checkOutDate, current->checkOutTime);
     
-    // Menu for what to modify
-    printf("\nWhat would you like to modify?\n");
-    printf("1. Check-in date and time\n");
-    printf("2. Check-out date and time\n");
-    printf("3. Cancel and go back\n");
+    // Instead of using getMenuChoice, directly display the options and get input
+    printf("\n  What would you like to modify?\n");
+    printf("  1. Check-in date and time\n");
+    printf("  2. Check-out date and time\n");
+    printf("  3. Cancel and go back\n\n");
     
+    printf("  Enter your choice (1-3): ");
     int choice;
-    printf("\nEnter your choice: ");
     scanf("%d", &choice);
     
     char newDate[11], newTime[6];
     
     switch (choice) {
         case 1: // Modify check-in
-            printf("Enter new check-in date (YYYY-MM-DD): ");
+            printf("\n  Enter new check-in date (YYYY-MM-DD): ");
             scanf("%s", newDate);
             
             if (!isValidDate(newDate)) {
-                printf("\nError: Invalid date format.\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Invalid date format.");
                 return;
             }
             
-            printf("Enter new check-in time (HH:MM): ");
+            printf("  Enter new check-in time (HH:MM): ");
             scanf("%s", newTime);
             
             if (!isValidTime(newTime)) {
-                printf("\nError: Invalid time format.\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Invalid time format.");
                 return;
             }
             
@@ -659,9 +748,7 @@ void modifyReservation(char username[]) {
             if (compareDates(newDate, current->checkOutDate) > 0 || 
                 (compareDates(newDate, current->checkOutDate) == 0 && 
                  strcmp(newTime, current->checkOutTime) >= 0)) {
-                printf("\nError: Check-in date/time must be before check-out date/time.\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Check-in date/time must be before check-out date/time.");
                 return;
             }
             
@@ -669,29 +756,29 @@ void modifyReservation(char username[]) {
             strcpy(current->checkInDate, newDate);
             strcpy(current->checkInTime, newTime);
             
-            system("cls");
-            printf("\n=== Reservation Modified ===\n");
-            printf("Your check-in has been updated to %s at %s\n", newDate, newTime);
+            // Save data immediately after modifying a reservation
+            saveData();
+            
+            char message1[100];
+            sprintf(message1, "Your check-in has been updated to %s at %s", newDate, newTime);
+            displayHeader("RESERVATION MODIFIED");
+            displayMessage(message1);
             break;
             
         case 2: // Modify check-out
-            printf("Enter new check-out date (YYYY-MM-DD): ");
+            printf("\n  Enter new check-out date (YYYY-MM-DD): ");
             scanf("%s", newDate);
             
             if (!isValidDate(newDate)) {
-                printf("\nError: Invalid date format.\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Invalid date format.");
                 return;
             }
             
-            printf("Enter new check-out time (HH:MM): ");
+            printf("  Enter new check-out time (HH:MM): ");
             scanf("%s", newTime);
             
             if (!isValidTime(newTime)) {
-                printf("\nError: Invalid time format.\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Invalid time format.");
                 return;
             }
             
@@ -699,9 +786,7 @@ void modifyReservation(char username[]) {
             if (compareDates(current->checkInDate, newDate) > 0 || 
                 (compareDates(current->checkInDate, newDate) == 0 && 
                  strcmp(current->checkInTime, newTime) >= 0)) {
-                printf("\nError: Check-out date/time must be after check-in date/time.\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Check-out date/time must be after check-in date/time.");
                 return;
             }
             
@@ -709,51 +794,49 @@ void modifyReservation(char username[]) {
             strcpy(current->checkOutDate, newDate);
             strcpy(current->checkOutTime, newTime);
             
-            system("cls");
-            printf("\n=== Reservation Modified ===\n");
-            printf("Your check-out has been updated to %s at %s\n", newDate, newTime);
+            // Save data immediately after modifying a reservation
+            saveData();
+            
+            char message2[100];
+            sprintf(message2, "Your check-out has been updated to %s at %s", newDate, newTime);
+            displayHeader("RESERVATION MODIFIED");
+            displayMessage(message2);
             break;
             
         case 3: // Cancel
-            printf("Modification cancelled.\n");
+            displayMessage("Modification cancelled.");
             break;
             
         default:
-            printf("\nError: Invalid choice.\n");
+            displayMessage("Error: Invalid choice.");
             break;
     }
-    
-    printf("\nPress any key to continue...");
-    getch();
 }
 
 void deleteUser() {
-    system("cls");
     displayHeader("DELETE USER");
     
     // Display all users first
     User* currentUser = userList;
     
-    printf("\nAll Users:\n");
-    printf("%-10s %-8s\n", "Username", "Role");
-    printf("-------------------\n");
+    printf("  All Users:\n");
+    printf("  %-10s %-8s\n", "Username", "Role");
+    printf("  -------------------\n");
     
     while (currentUser != NULL) {
-        printf("%-10s %-8s\n", 
+        printf("  %-10s %-8s\n", 
                currentUser->username, 
                currentUser->isAdmin ? "Admin" : "User");
         currentUser = currentUser->next;
     }
     
     char username[MAX_NAME_LEN];
-    printf("\nEnter username to delete: ");
+    printf("\n  Enter username to delete: ");
     scanf("%s", username);
     
     // Don't allow deleting the admin account
     if (strcmp(username, "admin") == 0) {
-        printf("\nError: Cannot delete the main admin account.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: Cannot delete the main admin account.");
         return;
     }
     
@@ -795,11 +878,13 @@ void deleteUser() {
             
             free(current);
             
-            system("cls");
-            printf("\n=== User Deleted ===\n");
-            printf("User %s and all their reservations have been deleted.\n", username);
-            printf("\nPress any key to continue...");
-            getch();
+            // Save data immediately after deleting a user
+            saveData();
+            
+            char message[100];
+            sprintf(message, "User %s and all their reservations have been deleted.", username);
+            displayHeader("USER DELETED");
+            displayMessage(message);
             return;
         }
         prev = current;
@@ -807,30 +892,25 @@ void deleteUser() {
     }
     
     if (!found) {
-        printf("\nError: User not found.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("Error: User not found.");
     }
 }
 
 void viewAllReservations() {
-    system("cls");
     displayHeader("ALL RESERVATIONS");
     
     Reservation* current = reservationList;
     
     if (current == NULL) {
-        printf("No reservations found.\n");
-        printf("\nPress any key to continue...");
-        getch();
+        displayMessage("No reservations found.");
         return;
     }
     
-    printf("\n%-10s %-8s %-25s %-25s\n", "Username", "Room #", "Check-in", "Check-out");
-    printf("----------------------------------------------------------------------\n");
+    printf("  %-10s %-8s %-25s %-25s\n", "Username", "Room #", "Check-in", "Check-out");
+    printf("  ----------------------------------------------------------------------\n");
     
     while (current != NULL) {
-        printf("%-10s %-8d %-25s %-25s\n", 
+        printf("  %-10s %-8d %-25s %-25s\n", 
                current->username, 
                current->roomNumber, 
                // Format check-in date and time together
@@ -840,12 +920,10 @@ void viewAllReservations() {
         current = current->next;
     }
     
-    printf("\nPress any key to continue...");
-    getch();
+    displayMessage("");
 }
 
 void viewStatistics() {
-    system("cls");
     displayHeader("HOTEL STATISTICS");
     
     int totalReservations = 0;
@@ -865,37 +943,35 @@ void viewStatistics() {
         }
     }
     
-    printf("\nTotal Rooms: %d\n", totalRooms);
-    printf("Booked Rooms: %d\n", bookedRooms);
-    printf("Available Rooms: %d\n", totalRooms - bookedRooms);
-    printf("Total Reservations: %d\n", totalReservations);
-    printf("Occupancy Rate: %d%%\n", totalRooms > 0 ? (bookedRooms * 100) / totalRooms : 0);
+    printf("  Total Rooms: %d\n", totalRooms);
+    printf("  Booked Rooms: %d\n", bookedRooms);
+    printf("  Available Rooms: %d\n", totalRooms - bookedRooms);
+    printf("  Total Reservations: %d\n", totalReservations);
+    printf("  Occupancy Rate: %d%%\n", totalRooms > 0 ? (bookedRooms * 100) / totalRooms : 0);
     
-    printf("\nPress any key to continue...");
-    getch();
+    displayMessage("");
 }
 
 void searchAvailableRooms() {
-    system("cls");
     displayHeader("SEARCH ROOMS");
     
-    printf("\nAvailable Room Types:\n");
-    printf("1. Standard - Basic comfortable room\n");
-    printf("2. Deluxe - Spacious room with better amenities\n");
-    printf("3. Suite - Luxury accommodation\n");
+    printf("  Available Room Types:\n");
+    printf("  1. Standard - Basic comfortable room\n");
+    printf("  2. Deluxe - Spacious room with better amenities\n");
+    printf("  3. Suite - Luxury accommodation\n");
     
     char roomType[MAX_ROOM_TYPE_LEN];
-    printf("\nEnter room type to search (or 'all' for all types): ");
+    printf("\n  Enter room type to search (or 'all' for all types): ");
     scanf("%s", roomType);
     
-    printf("\n%s Rooms:\n", strcmp(roomType, "all") == 0 ? "All" : roomType);
-    printf("\n%-8s %-20s %-12s %-15s\n", "Room #", "Room Type", "Status", "Price/Night(P)");
-    printf("----------------------------------------------------------\n");
+    printf("\n  %s Rooms:\n", strcmp(roomType, "all") == 0 ? "All" : roomType);
+    printf("\n  %-8s %-20s %-12s %-15s\n", "Room #", "Room Type", "Status", "Price/Night(P)");
+    printf("  ----------------------------------------------------------\n");
     
     int i, found = 0;
     for (i = 0; i < totalRooms; i++) {
         if (strcmp(roomType, "all") == 0 || strcmp(rooms[i].roomType, roomType) == 0) {
-            printf("%-8d %-20s %-12s P%-14.0f\n", 
+            printf("  %-8d %-20s %-12s P%-14.0f\n", 
                    rooms[i].roomNumber, 
                    rooms[i].roomType,
                    "Available", // Always show as available
@@ -905,58 +981,58 @@ void searchAvailableRooms() {
     }
     
     if (!found) {
-        printf("No rooms of type %s found.\n", roomType);
+        char message[100];
+        sprintf(message, "No rooms of type %s found.", roomType);
+        printf("  %s\n", message);
     }
     
-    printf("\nPress any key to continue...");
-    getch();
+    displayMessage("");
 }
 
 void showAdminMenu() {
     int choice;
     
     do {
-        system("cls");
         displayHeader("ADMIN MENU");
         
-        printf("\n1. View all reservations\n");
-        printf("2. View all users\n");
-        printf("3. Create a new room\n");
-        printf("4. View room reservations\n");
-        printf("5. Remove a reservation\n");
-        printf("6. Delete a user\n");
-        printf("7. View statistics\n");
-        printf("8. Search available rooms\n");
-        printf("9. Log out\n");
+        char* adminOptions[] = {
+            "View all reservations",
+            "View all users",
+            "Create a new room",
+            "View room reservations",
+            "Remove a reservation",
+            "Delete a user",
+            "View statistics",
+            "Search available rooms",
+            "Log out"
+        };
         
-        printf("\nEnter choice: ");
-        scanf("%d", &choice);
+        printf("  Use UP/DOWN keys to navigate and ENTER to select:\n\n");
+        choice = getMenuChoice(adminOptions, 9);
         
         switch (choice) {
             case 1:
                 viewAllReservations();
                 break;
             case 2:
-                system("cls");
                 displayHeader("ALL USERS");
                 
-                printf("\n%-10s %-8s\n", "Username", "Role");
-                printf("-------------------\n");
+                printf("  %-10s %-8s\n", "Username", "Role");
+                printf("  -------------------\n");
                 
                 if (userList == NULL) {
-                    printf("No users found.\n");
+                    printf("  No users found.\n");
                 } else {
                     User* currentUser = userList;
                     while (currentUser != NULL) {
-                        printf("%-10s %-8s\n", 
+                        printf("  %-10s %-8s\n", 
                                currentUser->username, 
                                currentUser->isAdmin ? "Admin" : "User");
                         currentUser = currentUser->next;
                     }
                 }
                 
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("");
                 break;
             case 3:
                 createRoom();
@@ -977,14 +1053,14 @@ void showAdminMenu() {
                 searchAvailableRooms();
                 break;
             case 9:
-                system("cls");
-                printf("Logging out...\n");
-                break;
-            default:
-                printf("\nError: Invalid choice! Please try again.\n");
-                printf("\nPress any key to continue...");
-                getch();
-                break;
+    displayHeader("LOGGING OUT");
+    printf("  Saving data and logging out...\n");
+    
+    // Save data before logout
+    saveData();
+    
+    // Don't do cleanup or reload here
+    break;
         }
     } while (choice != 9);
 }
@@ -993,18 +1069,19 @@ void showUserMenu(char username[]) {
     int choice;
     
     do {
-        system("cls");
         displayHeader("USER MENU");
         
-        printf("\n1. Make a reservation\n");
-        printf("2. View my reservations\n");
-        printf("3. Modify my reservation\n");
-        printf("4. Change my password\n");
-        printf("5. Search available rooms\n");
-        printf("6. Log out\n");
+        char* userOptions[] = {
+            "Make a reservation",
+            "View my reservations",
+            "Modify my reservation",
+            "Change my password",
+            "Search available rooms",
+            "Log out"
+        };
         
-        printf("\nEnter choice: ");
-        scanf("%d", &choice);
+        printf("  Use UP/DOWN keys to navigate and ENTER to select:\n\n");
+        choice = getMenuChoice(userOptions, 6);
         
         switch (choice) {
             case 1:
@@ -1023,41 +1100,40 @@ void showUserMenu(char username[]) {
                 searchAvailableRooms();
                 break;
             case 6:
-                system("cls");
-                printf("Logging out...\n");
-                break;
+    displayHeader("LOGGING OUT");
+    printf("  Saving data and logging out...\n");
+    
+    // IMPORTANT: Save data before logout
+    saveData();
+    
+    // Don't clear the lists here - we'll do it in main() after returning
+    break;
             default:
-                printf("\nError: Invalid choice!\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Invalid choice!");
                 break;
         }
     } while (choice != 6);
 }
 
 void registerUser() {
-    system("cls");
     displayHeader("USER REGISTRATION");
     
     char username[MAX_NAME_LEN], password[MAX_PASSWORD_LEN];
     
-    printf("Enter a username: ");
+    printf("  Enter a username: ");
     scanf("%s", username);
     
     // Check if username already exists
     User* current = userList;
     while (current != NULL) {
         if (strcmp(current->username, username) == 0) {
-            printf("\nError: Username already exists.\n");
-            printf("Please choose a different username.\n");
-            printf("\nPress any key to continue...");
-            getch();
+            displayMessage("Error: Username already exists.\nPlease choose a different username.");
             return;
         }
         current = current->next;
     }
     
-    printf("Enter a password: ");
+    printf("  Enter a password: ");
     int i = 0;
     char ch;
     
@@ -1076,11 +1152,11 @@ void registerUser() {
     
     addUser(username, password, 0);
     
-    system("cls");
-    printf("\n=== Registration Successful ===\n");
-    printf("You can now log in with your credentials.\n");
-    printf("\nPress any key to continue...");
-    getch();
+    // Save data immediately after registering a user
+    saveData();
+    
+    displayHeader("REGISTRATION SUCCESSFUL");
+    displayMessage("You can now log in with your credentials.");
 }
 
 void cleanup() {
@@ -1090,6 +1166,7 @@ void cleanup() {
         currentUser = currentUser->next;
         free(temp);
     }
+    userList = NULL;
     
     Reservation* currentReservation = reservationList;
     while (currentReservation != NULL) {
@@ -1097,13 +1174,16 @@ void cleanup() {
         currentReservation = currentReservation->next;
         free(temp);
     }
+    reservationList = NULL;
     
     free(rooms);
+    rooms = NULL;
 }
 
 void saveData() {
     FILE* file = fopen(DATA_FILE, "w");
     if (file == NULL) {
+        displayMessage("Error: Could not open file for writing.");
         return;
     }
     
@@ -1142,6 +1222,7 @@ void saveData() {
 void loadData() {
     FILE* file = fopen(DATA_FILE, "r");
     if (file == NULL) {
+        // File doesn't exist yet, not an error
         return;
     }
     
@@ -1187,8 +1268,8 @@ void loadData() {
     fclose(file);
 }
 
-void updateRoomPrices() {
-	int i;
+void updateRoomPrices(void) {
+    int i;
     for (i = 0; i < totalRooms; i++) {
         if (strcmp(rooms[i].roomType, "Standard") == 0) {
             rooms[i].pricePerNight = 1500.0;
@@ -1268,13 +1349,20 @@ char* formatDateTime(char date[], char time[]) {
 }
 
 int main() {
+    char* mainOptions[] = {
+        "Register",
+        "Login",
+        "Exit"
+    };
+    
     int option;
     char username[MAX_NAME_LEN], password[MAX_PASSWORD_LEN];
     User* loggedInUser = NULL;
     
+    // Initialize and load data only once at program start
     initializeRooms();
     loadData();
-    updateRoomPrices(); // Update prices to ensure they're correct
+    updateRoomPrices();
     checkExpiredReservations();
     
     // Add default users if they don't exist
@@ -1284,28 +1372,22 @@ int main() {
     }
     
     do {
-        system("cls");
         displayHeader("HOTEL RESERVATION SYSTEM");
         
-        printf("\n1. Register\n");
-        printf("2. Login\n");
-        printf("3. Exit\n");
-        
-        printf("\nEnter choice: ");
-        scanf("%d", &option);
+        printf("  Use UP/DOWN keys to navigate and ENTER to select:\n\n");
+        option = getMenuChoice(mainOptions, 3);
         
         switch (option) {
             case 1:
                 registerUser();
                 break;
             case 2:
-                system("cls");
                 displayHeader("USER LOGIN");
                 
-                printf("Enter username: ");
+                printf("  Enter username: ");
                 scanf("%s", username);
                 
-                printf("Enter password: ");
+                printf("  Enter password: ");
                 int i = 0;
                 char ch;
                 
@@ -1325,15 +1407,14 @@ int main() {
                 loggedInUser = authenticateUser(username, password);
                 
                 if (loggedInUser == NULL) {
-                    printf("\n\nError: Invalid username or password.\n");
-                    printf("Please register first if you haven't.\n");
-                    printf("\nPress any key to continue...");
+                    printf("\n\n  Error: Invalid username or password.\n");
+                    printf("  Please register first if you haven't.\n");
+                    printf("\n  Press any key to continue...");
                     getch();
                 } else {
-                    system("cls");
-                    printf("\n=== Login Successful ===\n");
-                    printf("Welcome %s!\n", username);
-                    printf("\nPress any key to continue...");
+                    displayHeader("LOGIN SUCCESSFUL");
+                    printf("  Welcome %s!\n", username);
+                    printf("\n  Press any key to continue...");
                     getch();
                     
                     if (loggedInUser->isAdmin) {
@@ -1341,21 +1422,21 @@ int main() {
                     } else {
                         showUserMenu(username);
                     }
+                    
+                    // No cleanup or reload needed here
                 }
                 break;
             case 3:
-                system("cls");
-                printf("Saving data and exiting...\n");
+                displayHeader("EXITING");
+                printf("  Saving data and exiting...\n");
                 saveData();
                 break;
             default:
-                printf("\nError: Invalid choice!\n");
-                printf("\nPress any key to continue...");
-                getch();
+                displayMessage("Error: Invalid choice!");
                 break;
         }
     } while (option != 3);
     
-    cleanup();
+    cleanup(); // Only clean up at program exit
     return 0;
 }
